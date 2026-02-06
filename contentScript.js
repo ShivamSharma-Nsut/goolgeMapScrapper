@@ -1,7 +1,7 @@
 // Content script that runs on Google Maps pages
 // Manages UI, data collection, and export
 
-(function() {
+(function () {
   'use strict';
 
   // State management
@@ -14,7 +14,7 @@
   function injectInterceptor() {
     const script = document.createElement('script');
     script.src = chrome.runtime.getURL('injected.js');
-    script.onload = function() {
+    script.onload = function () {
       this.remove();
     };
     (document.head || document.documentElement).appendChild(script);
@@ -24,17 +24,17 @@
   function createUI() {
     // Check if UI already exists
     if (document.getElementById('gmaps-scraper-panel')) {
-      console.log('Google Maps Scraper: UI already exists');
+      console.log('Mr. G-Map Scrapper: UI already exists');
       return;
     }
 
-    console.log('Google Maps Scraper: Creating UI...');
+    console.log('Mr. G-Map Scrapper: Creating UI...');
 
     const panel = document.createElement('div');
     panel.id = 'gmaps-scraper-panel';
     panel.innerHTML = `
       <div class="scraper-header">
-        <h3>🗺️ Google Maps Scraper</h3>
+        <h3>🗺️ Mr. G-Map Scrapper</h3>
         <button id="scraper-minimize" class="btn-icon">−</button>
       </div>
       <div class="scraper-body">
@@ -68,7 +68,7 @@
         </div>
 
         <div class="scraper-log" id="scraper-log">
-          <div class="log-item">[${new Date().toLocaleTimeString()}] 🌟 Google Maps Scraper loaded successfully!</div>
+          <div class="log-item">[${new Date().toLocaleTimeString()}] 🌟 Mr. G-Map Scrapper loaded successfully!</div>
           <div class="log-item">[${new Date().toLocaleTimeString()}] Ready to scrape. Click "Start Scraping" to begin.</div>
         </div>
       </div>
@@ -84,16 +84,16 @@
   function attachEventListeners() {
     // Start button
     document.getElementById('start-scraping').addEventListener('click', startScraping);
-    
+
     // Stop button
     document.getElementById('stop-scraping').addEventListener('click', stopScraping);
-    
+
     // Export button
     document.getElementById('export-csv').addEventListener('click', exportToCSV);
-    
+
     // Clear button
     document.getElementById('clear-data').addEventListener('click', clearData);
-    
+
     // Minimize button
     document.getElementById('scraper-minimize').addEventListener('click', togglePanel);
 
@@ -115,7 +115,7 @@
     isScaping = true;
     addLog('🚀 Scraping started...');
     updateStatus('Scraping...');
-    
+
     document.getElementById('start-scraping').style.display = 'none';
     document.getElementById('stop-scraping').style.display = 'inline-block';
 
@@ -133,7 +133,7 @@
     isScaping = false;
     addLog('⏸️ Scraping stopped');
     updateStatus('Stopped');
-    
+
     document.getElementById('start-scraping').style.display = 'inline-block';
     document.getElementById('stop-scraping').style.display = 'none';
 
@@ -146,11 +146,11 @@
   // Start auto-scrolling to load more results
   function startAutoScroll() {
     addLog('📜 Auto-scroll enabled');
-    
+
     let scrollCount = 0;
     let noNewResultsCount = 0;
     let lastResultCount = scrapedData.length;
-    
+
     autoScrollInterval = setInterval(() => {
       if (!isScaping) {
         clearInterval(autoScrollInterval);
@@ -172,15 +172,15 @@
         const previousScrollTop = resultsContainer.scrollTop;
         resultsContainer.scrollTop = resultsContainer.scrollHeight;
         scrollCount++;
-        
+
         // Check if we've reached the end (scroll position didn't change)
         if (previousScrollTop === resultsContainer.scrollTop) {
           addLog('📍 Reached end of results, checking for new items...');
-          
+
           // Give Google a moment to load more results
           setTimeout(() => {
             scrapeVisibleResults();
-            
+
             // Check if we got new results
             if (scrapedData.length === lastResultCount) {
               noNewResultsCount++;
@@ -208,13 +208,13 @@
   // Scrape visible results from DOM
   function scrapeVisibleResults() {
     addLog('🔍 Scanning visible results...');
-    
+
     // Find all result items in the feed
     const resultElements = document.querySelectorAll('[role="feed"] > div > div > a');
-    
+
     let newCount = 0;
     const newPlaces = [];
-    
+
     resultElements.forEach(element => {
       try {
         const placeData = extractPlaceFromElement(element);
@@ -233,7 +233,7 @@
       addLog(`✅ Found ${newCount} new businesses`);
       updateCount();
       enableExportButtons();
-      
+
       // If detailed extraction is enabled, process each new place
       if (document.getElementById('extract-details').checked) {
         addLog(`🔄 Starting detailed extraction for ${newPlaces.length} businesses...`);
@@ -252,12 +252,12 @@
     }
 
     const { element, placeId } = places[index];
-    
+
     addLog(`📍 Processing ${index + 1}/${places.length}...`);
-    
+
     // Click and extract details
     clickForDetails(element, placeId);
-    
+
     // Wait before processing next item (5.5 seconds total per business)
     setTimeout(() => {
       processDetailsQueue(places, index + 1);
@@ -270,11 +270,11 @@
       // Click the business link
       element.click();
       addLog(`🔍 Opening details...`);
-      
+
       // Wait longer for the detail panel to fully load (increased to 4 seconds)
       setTimeout(() => {
         extractDetailedInfo(placeId);
-        
+
         // After extracting, go back to the list
         setTimeout(() => {
           const backButton = document.querySelector('button[aria-label*="Back"], button[aria-label*="back"]');
@@ -318,14 +318,14 @@
 
       // === PHONE NUMBER EXTRACTION ===
       let phone = '';
-      
+
       // Method 1: Look for phone button with specific aria-label pattern
       const phoneButtons = document.querySelectorAll('button[aria-label*="Phone"], button[data-tooltip*="Phone"]');
       for (const btn of phoneButtons) {
         const ariaLabel = btn.getAttribute('aria-label') || '';
         const tooltip = btn.getAttribute('data-tooltip') || '';
         const combined = ariaLabel + ' ' + tooltip;
-        
+
         // Look for phone pattern in aria-label
         const phoneMatch = combined.match(/[\+\(]?[\d\s\-\(\)]{10,}/);
         if (phoneMatch) {
@@ -344,7 +344,7 @@
           const text = el.textContent || '';
           const aria = el.getAttribute('aria-label') || '';
           const combined = text + ' ' + aria;
-          
+
           // Match US phone patterns: +1 XXX-XXX-XXXX, (XXX) XXX-XXXX, XXX-XXX-XXXX
           const phoneMatch = combined.match(/(?:\+1\s?)?\(?([0-9]{3})\)?[\s\-]?([0-9]{3})[\s\-]?([0-9]{4})/);
           if (phoneMatch) {
@@ -361,7 +361,7 @@
           /\(\d{3}\)\s?\d{3}[\s\-]?\d{4}/,
           /\d{3}[\s\-]\d{3}[\s\-]\d{4}/
         ];
-        
+
         for (const pattern of phonePatterns) {
           const match = bodyText.match(pattern);
           if (match) {
@@ -381,26 +381,26 @@
 
       // === WEBSITE EXTRACTION ===
       let website = '';
-      
+
       // Method 1: Look for website link - avoid Google's internal links
       const websiteLinks = document.querySelectorAll('a[href^="http"]');
       for (const link of websiteLinks) {
         const href = link.getAttribute('href') || '';
-        
+
         // Skip Google internal links and booking links
-        if (href && 
-            !href.includes('google.com') && 
-            !href.includes('goo.gl') &&
-            !href.includes('flexbook.me') &&
-            !href.includes('booking') &&
-            !href.includes('rwg_token')) {
-          
+        if (href &&
+          !href.includes('google.com') &&
+          !href.includes('goo.gl') &&
+          !href.includes('flexbook.me') &&
+          !href.includes('booking') &&
+          !href.includes('rwg_token')) {
+
           // Check if this looks like a real business website
           const linkText = link.textContent.toLowerCase();
-          const hasWebsiteIndicator = linkText.includes('website') || 
-                                      linkText.includes('site') ||
-                                      link.getAttribute('aria-label')?.toLowerCase().includes('website');
-          
+          const hasWebsiteIndicator = linkText.includes('website') ||
+            linkText.includes('site') ||
+            link.getAttribute('aria-label')?.toLowerCase().includes('website');
+
           // If it has website indicator OR it's a domain link
           if (hasWebsiteIndicator || /^https?:\/\/[a-z0-9\-]+\.[a-z]{2,}/i.test(href)) {
             website = href;
@@ -462,7 +462,7 @@
         const aria = btn.getAttribute('aria-label') || '';
         if (aria) {
           place.fullAddress = aria.replace(/^Address:\s*/i, '').trim();
-          
+
           // Parse address components
           const parts = place.fullAddress.split(',');
           if (parts.length >= 2) {
@@ -488,7 +488,7 @@
         const aria = span.getAttribute('aria-label') || '';
         const ratingMatch = aria.match(/([\d\.]+)\s*star/i);
         const reviewMatch = aria.match(/(\d+)\s*review/i);
-        
+
         if (ratingMatch) place.averageRating = ratingMatch[1];
         if (reviewMatch) place.reviewCount = reviewMatch[1];
       }
@@ -531,7 +531,7 @@
       if (phone) summary.push('✓ phone');
       if (website) summary.push('✓ website');
       if (place.fullAddress) summary.push('✓ address');
-      
+
       addLog(`✅ ${place.name}${summary.length > 0 ? ' (' + summary.join(', ') + ')' : ''}`);
       updateCount();
 
@@ -556,7 +556,7 @@
       const nameElement = element.querySelector('[class*="fontHeadlineSmall"]');
       const ratingElement = element.querySelector('[role="img"][aria-label*="stars"]');
       const addressElement = element.querySelector('[class*="fontBodyMedium"] > div:nth-child(2)');
-      
+
       const name = nameElement ? nameElement.textContent.trim() : '';
       const rating = ratingElement ? ratingElement.getAttribute('aria-label') : '';
       const address = addressElement ? addressElement.textContent.trim() : '';
@@ -611,33 +611,33 @@
   // Handle search response data
   function handleSearchData(event) {
     if (!isScaping) return;
-    
+
     addLog('📥 Received search API response');
-    
+
     // The response might contain additional data
     // For now, we'll rely on DOM scraping
     // In future, can parse the API response for more details
-    
+
     setTimeout(() => scrapeVisibleResults(), 500);
   }
 
   // Handle details response data
   function handleDetailsData(event) {
     if (!isScaping) return;
-    
+
     addLog('📥 Received details API response');
-    
+
     // Check if we have parsed place details
     if (event.detail && event.detail.placeDetails) {
       const apiDetails = event.detail.placeDetails;
-      
+
       // Try to match this with a recently added place
       // Use the most recent place without full details
       const recentPlace = scrapedData
         .slice()
         .reverse()
         .find(p => !p.phone || !p.website);
-      
+
       if (recentPlace) {
         // Enrich the place data with API details
         if (apiDetails.phone && !recentPlace.phone) {
@@ -649,9 +649,9 @@
           try {
             const domain = new URL(apiDetails.website).hostname.replace('www.', '');
             recentPlace.domain = domain;
-          } catch (e) {}
+          } catch (e) { }
         }
-        
+
         addLog(`✨ Enhanced data with API details for: ${recentPlace.name}`);
       }
     }
@@ -693,10 +693,10 @@
       'Fid',
       'Place Id'
     ];
-    
+
     // Create CSV content
     let csvContent = headers.join(',') + '\n';
-    
+
     scrapedData.forEach(place => {
       const row = [
         escapeCsvValue(place.name),
@@ -731,11 +731,11 @@
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
-    
+
     link.setAttribute('href', url);
     link.setAttribute('download', `google-maps-data-${Date.now()}.csv`);
     link.style.visibility = 'hidden';
-    
+
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -746,14 +746,14 @@
   // Escape CSV values
   function escapeCsvValue(value) {
     if (!value) return '';
-    
+
     value = String(value);
-    
+
     // Escape quotes and wrap in quotes if contains comma, quote, or newline
     if (value.includes(',') || value.includes('"') || value.includes('\n')) {
       value = '"' + value.replace(/"/g, '""') + '"';
     }
-    
+
     return value;
   }
 
@@ -784,7 +784,7 @@
     const logItem = document.createElement('div');
     logItem.className = 'log-item';
     logItem.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
-    
+
     logContainer.appendChild(logItem);
     logContainer.scrollTop = logContainer.scrollHeight;
 
@@ -808,44 +808,44 @@
 
   // Initialize
   function init() {
-    console.log('Google Maps Scraper: Initializing...');
+    console.log('Mr. G-Map Scrapper: Initializing...');
     console.log('Current URL:', window.location.href);
     console.log('Document ready state:', document.readyState);
 
     // Check if we're on a Google Maps page
     if (!window.location.href.includes('/maps')) {
-      console.log('Google Maps Scraper: Not on a maps page, skipping...');
+      console.log('Mr. G-Map Scrapper: Not on a maps page, skipping...');
       return;
     }
 
-    console.log('Google Maps Scraper: On maps page, proceeding with init...');
-    
+    console.log('Mr. G-Map Scrapper: On maps page, proceeding with init...');
+
     // Inject API interceptor
     injectInterceptor();
-    console.log('Google Maps Scraper: Interceptor injected');
-    
+    console.log('Mr. G-Map Scrapper: Interceptor injected');
+
     // Create UI with multiple retry attempts
     let attempts = 0;
     const maxAttempts = 10;
-    
+
     const tryCreateUI = () => {
       attempts++;
-      console.log(`Google Maps Scraper: UI creation attempt ${attempts}/${maxAttempts}`);
-      
+      console.log(`Mr. G-Map Scrapper: UI creation attempt ${attempts}/${maxAttempts}`);
+
       try {
         createUI();
-        console.log('Google Maps Scraper: UI created successfully!');
+        console.log('Mr. G-Map Scrapper: UI created successfully!');
       } catch (error) {
-        console.error('Google Maps Scraper: Error creating UI:', error);
-        
+        console.error('Mr. G-Map Scrapper: Error creating UI:', error);
+
         if (attempts < maxAttempts) {
           setTimeout(tryCreateUI, 1000);
         } else {
-          console.error('Google Maps Scraper: Failed to create UI after max attempts');
+          console.error('Mr. G-Map Scrapper: Failed to create UI after max attempts');
         }
       }
     };
-    
+
     // Start UI creation after a delay
     setTimeout(tryCreateUI, 2000);
   }
@@ -863,10 +863,10 @@
     const url = location.href;
     if (url !== lastUrl) {
       lastUrl = url;
-      console.log('Google Maps Scraper: URL changed to', url);
+      console.log('Mr. G-Map Scrapper: URL changed to', url);
       if (url.includes('/maps') && !document.getElementById('gmaps-scraper-panel')) {
         setTimeout(init, 2000);
       }
     }
-  }).observe(document, {subtree: true, childList: true});
+  }).observe(document, { subtree: true, childList: true });
 })();
