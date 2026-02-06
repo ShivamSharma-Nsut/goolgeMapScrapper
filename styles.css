@@ -1,4 +1,4 @@
-/* Google Maps Scraper Extension Styles */
+/* Mr. G-Map Scrapper Extension Styles */
 
 #gmaps-scraper-panel {
   position: fixed;
@@ -232,6 +232,7 @@
     opacity: 0;
     transform: translateX(10px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -252,9 +253,12 @@
 
 /* Pulse animation for scraping status */
 @keyframes pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.5;
   }
