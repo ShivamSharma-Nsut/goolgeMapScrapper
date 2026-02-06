@@ -29,10 +29,7 @@
     panel.id = 'gmaps-scraper-panel';
     panel.innerHTML = `
       <div class="scraper-header">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <img src="${chrome.runtime.getURL('icon48.png')}" style="width: 24px; height: 24px;">
-          <h3>Mr. G-Map Scrapper</h3>
-        </div>
+        <h3>🗺️ Mr. G-Map Scrapper</h3>
         <button id="scraper-minimize" class="btn-icon">−</button>
       </div>
       <div class="scraper-body">
