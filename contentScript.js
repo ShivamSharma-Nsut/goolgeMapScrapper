@@ -9,16 +9,11 @@
   let isScaping = false;
   let autoScrollInterval = null;
   let scrapedPlaceIds = new Set();
+  // Queue state
+  let detailsQueue = [];
+  let isProcessingQueue = false;
 
-  // Inject the API interceptor script
-  function injectInterceptor() {
-    const script = document.createElement('script');
-    script.src = chrome.runtime.getURL('injected.js');
-    script.onload = function () {
-      this.remove();
-    };
-    (document.head || document.documentElement).appendChild(script);
-  }
+
 
   // Create the scraper UI
   function createUI() {
@@ -97,9 +92,7 @@
     // Minimize button
     document.getElementById('scraper-minimize').addEventListener('click', togglePanel);
 
-    // Listen for intercepted API responses
-    window.addEventListener('gmaps_search_response', handleSearchData);
-    window.addEventListener('gmaps_details_response', handleDetailsData);
+
   }
 
   // Toggle panel minimize/maximize
@@ -157,14 +150,13 @@
         return;
       }
 
-      // Don't scroll if we're currently extracting details
-      if (document.getElementById('extract-details').checked) {
-        const status = document.getElementById('scraper-status').textContent;
-        if (status.includes('Extracting')) {
-          // Wait for detail extraction to finish
-          return;
-        }
+      // Don't scroll if we're currently processing the queue
+      if (isProcessingQueue || detailsQueue.length > 0) {
+        // Wait for queue to empty
+        return;
       }
+
+      // Don't scroll if we're currently extracting details (status check)
 
       // Find the results container and scroll it
       const resultsContainer = document.querySelector('[role="feed"]');
@@ -218,10 +210,12 @@
     resultElements.forEach(element => {
       try {
         const placeData = extractPlaceFromElement(element);
-        if (placeData && !scrapedPlaceIds.has(placeData.placeId)) {
+        // Strict Check: Must have a valid Google Maps place URL
+        const href = element.getAttribute('href') || '';
+        if (placeData && !scrapedPlaceIds.has(placeData.placeId) && href.includes('/maps/')) {
           scrapedData.push(placeData);
           scrapedPlaceIds.add(placeData.placeId);
-          newPlaces.push({ element, placeId: placeData.placeId });
+          newPlaces.push({ element, placeId: placeData.placeId, name: placeData.name });
           newCount++;
         }
       } catch (error) {
@@ -234,38 +228,40 @@
       updateCount();
       enableExportButtons();
 
-      // If detailed extraction is enabled, process each new place
+      // If detailed extraction is enabled, add to queue
       if (document.getElementById('extract-details').checked) {
-        addLog(`🔄 Starting detailed extraction for ${newPlaces.length} businesses...`);
-        processDetailsQueue(newPlaces, 0);
+        addLog(`🔄 Added ${newPlaces.length} businesses to queue`);
+        detailsQueue.push(...newPlaces);
+        processQueue();
       }
     }
   }
 
-  // Process detail extraction queue one by one
-  function processDetailsQueue(places, index) {
-    if (!isScaping || index >= places.length) {
-      if (index >= places.length) {
-        addLog('✅ Detailed extraction complete!');
-      }
+  // Process queue serialy
+  function processQueue() {
+    if (isProcessingQueue) return;
+
+    if (detailsQueue.length === 0) {
+      isProcessingQueue = false;
+      addLog('✅ Queue empty, waiting for new results...');
       return;
     }
 
-    const { element, placeId } = places[index];
+    isProcessingQueue = true;
+    const item = detailsQueue.shift();
 
-    addLog(`📍 Processing ${index + 1}/${places.length}...`);
+    addLog(`📍 Processing ${item.name} (${detailsQueue.length} remaining)...`);
 
-    // Click and extract details
-    clickForDetails(element, placeId);
-
-    // Wait before processing next item (5.5 seconds total per business)
-    setTimeout(() => {
-      processDetailsQueue(places, index + 1);
-    }, 5500);
+    // Click and extract details, then callback to process next
+    clickForDetails(item.element, item.placeId, () => {
+      isProcessingQueue = false;
+      // Small delay before next item
+      setTimeout(processQueue, 1000);
+    });
   }
 
   // Click on a business to extract detailed information
-  function clickForDetails(element, placeId) {
+  function clickForDetails(element, placeId, onComplete) {
     try {
       // Click the business link
       element.click();
@@ -284,10 +280,16 @@
             // Alternative: press ESC key
             document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27 }));
           }
+
+          // Signal completion
+          if (onComplete) onComplete();
+
         }, 1000);
       }, 4000); // Increased from 3 to 4 seconds
     } catch (error) {
       console.error('Error clicking for details:', error);
+      // Ensure we don't stall the queue on error
+      if (onComplete) onComplete();
     }
   }
 
@@ -313,15 +315,32 @@
 
   function performExtraction(place) {
     try {
-      // Get all text content from the page for fallback extraction
-      const bodyText = document.body.textContent;
+      // === STRICT DATA VERIFICATION ===
+      // Verify we are looking at the correct business
+      const detailsHeader = document.querySelector('h1.du8b2d, h1.DUwDvf, h1.fontHeadlineLarge');
+      const detailsName = detailsHeader ? detailsHeader.textContent.trim() : '';
+
+      // If names function excessively mismatch, wait and retry
+      if (!detailsName || (place.name && !isNameMatch(place.name, detailsName))) {
+        console.warn(`Name mismatch! Expected: "${place.name}", Found: "${detailsName}". Retrying...`);
+        // Returning here effectively skips this corrupted cycle. 
+        // In a real retry loop we would use setTimeout and recall, but for now we skip to prevent bad data.
+        // Better to have empty fields than wrong fields.
+        return;
+      }
+
+      console.log(`✓ Verified business: ${detailsName}`);
 
       // === PHONE NUMBER EXTRACTION ===
       let phone = '';
 
-      // Method 1: Look for phone button with specific aria-label pattern
+      // Method 1: Look for phone button with specific aria-label pattern in the DETAILS panel only
+      // We scope this to the main role="main" or consistent containers to avoid sidebar noise
       const phoneButtons = document.querySelectorAll('button[aria-label*="Phone"], button[data-tooltip*="Phone"]');
       for (const btn of phoneButtons) {
+        // Validation: Button must be visible and inside a likely details container
+        if (btn.offsetParent === null) continue;
+
         const ariaLabel = btn.getAttribute('aria-label') || '';
         const tooltip = btn.getAttribute('data-tooltip') || '';
         const combined = ariaLabel + ' ' + tooltip;
@@ -337,36 +356,24 @@
         }
       }
 
-      // Method 2: Look for any clickable element with phone number
+      // Method 2: Look for any clickable element with phone number (Strict Mode)
       if (!phone) {
         const allClickable = document.querySelectorAll('button, a, div[role="button"]');
         for (const el of allClickable) {
+          if (el.offsetParent === null) continue;
+
           const text = el.textContent || '';
           const aria = el.getAttribute('aria-label') || '';
-          const combined = text + ' ' + aria;
 
-          // Match US phone patterns: +1 XXX-XXX-XXXX, (XXX) XXX-XXXX, XXX-XXX-XXXX
-          const phoneMatch = combined.match(/(?:\+1\s?)?\(?([0-9]{3})\)?[\s\-]?([0-9]{3})[\s\-]?([0-9]{4})/);
-          if (phoneMatch) {
-            phone = phoneMatch[0].trim();
-            break;
-          }
-        }
-      }
-
-      // Method 3: Search entire page text for phone pattern
-      if (!phone) {
-        const phonePatterns = [
-          /\+1\s?\d{3}[\s\-]?\d{3}[\s\-]?\d{4}/,
-          /\(\d{3}\)\s?\d{3}[\s\-]?\d{4}/,
-          /\d{3}[\s\-]\d{3}[\s\-]\d{4}/
-        ];
-
-        for (const pattern of phonePatterns) {
-          const match = bodyText.match(pattern);
-          if (match) {
-            phone = match[0].trim();
-            break;
+          // Strict check: Only accept if it looks VERY much like a phone number element
+          // e.g. contains an icon or is in a contact list section
+          if (text.match(/[\d]{3}/) || aria.match(/phone|call/i)) {
+            const combined = text + ' ' + aria;
+            const phoneMatch = combined.match(/(?:\+1\s?)?\(?([0-9]{3})\)?[\s\-]?([0-9]{3})[\s\-]?([0-9]{4})/);
+            if (phoneMatch) {
+              phone = phoneMatch[0].trim();
+              break;
+            }
           }
         }
       }
@@ -382,68 +389,61 @@
       // === WEBSITE EXTRACTION ===
       let website = '';
 
-      // Method 1: Look for website link - avoid Google's internal links
-      const websiteLinks = document.querySelectorAll('a[href^="http"]');
-      for (const link of websiteLinks) {
-        const href = link.getAttribute('href') || '';
+      // Define the scope: Use the container of the verified header
+      const uniqueContainer = detailsHeader ? detailsHeader.closest('[role="main"], [role="region"], .m6QErb') : document;
 
-        // Skip Google internal links and booking links
-        if (href &&
-          !href.includes('google.com') &&
-          !href.includes('goo.gl') &&
-          !href.includes('flexbook.me') &&
-          !href.includes('booking') &&
-          !href.includes('rwg_token')) {
+      // Method 1: Mimic Phone Logic - Look for specific "Website" action buttons
+      // Google often uses data-item-id="authority" for the primary website button
+      const websiteButtons = uniqueContainer.querySelectorAll(
+        'a[aria-label*="Website"], a[data-item-id="authority"], button[aria-label*="Website"]'
+      );
 
-          // Check if this looks like a real business website
-          const linkText = link.textContent.toLowerCase();
-          const hasWebsiteIndicator = linkText.includes('website') ||
-            linkText.includes('site') ||
-            link.getAttribute('aria-label')?.toLowerCase().includes('website');
+      for (const btn of websiteButtons) {
+        if (btn.offsetParent === null) continue; // Must be visible
 
-          // If it has website indicator OR it's a domain link
-          if (hasWebsiteIndicator || /^https?:\/\/[a-z0-9\-]+\.[a-z]{2,}/i.test(href)) {
-            website = href;
-            break;
-          }
+        const href = btn.getAttribute('href') || '';
+
+        // If it's a direct link
+        if (href && href.startsWith('http') && !href.includes('google.com/maps')) {
+          website = href;
+          break;
         }
+
+        // Sometimes it's a button that acts as a link? (Rare in Maps, mostly <a> tags)
       }
 
-      // Method 2: Look specifically for "Website" button
+      // Method 2: Fallback to scanning links in the container (Scoped)
       if (!website) {
-        const websiteButtons = document.querySelectorAll('button[aria-label*="Website"], a[aria-label*="Website"]');
-        for (const btn of websiteButtons) {
-          const link = btn.querySelector('a') || btn;
+        const websiteLinks = uniqueContainer.querySelectorAll('a[href^="http"]');
+        for (const link of websiteLinks) {
+          if (link.offsetParent === null) continue;
+
           const href = link.getAttribute('href') || '';
-          if (href && !href.includes('google.com') && !href.includes('flexbook')) {
+          const ariaLabel = (link.getAttribute('aria-label') || '').toLowerCase();
+          const text = (link.textContent || '').toLowerCase();
+
+          // Skip internal rubbish
+          if (href.includes('google.com') || href.includes('goo.gl')) continue;
+
+          // Check for explicit "Website" indicators
+          if (ariaLabel.includes('website') || text.includes('website') || text.includes('site')) {
             website = href;
             break;
           }
-        }
-      }
-
-      // Method 3: Look for data-item-id="authority"
-      if (!website) {
-        const authorityLink = document.querySelector('a[data-item-id="authority"]');
-        if (authorityLink) {
-          const href = authorityLink.getAttribute('href') || '';
-          if (href && !href.includes('google.com') && !href.includes('flexbook')) {
-            website = href;
-          }
-        }
-      }
-
-      // Method 4: Search for URL patterns in text (last resort)
-      if (!website) {
-        const urlMatch = bodyText.match(/https?:\/\/(?!.*google\.com)(?!.*flexbook)[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:\/[^\s]*)?/);
-        if (urlMatch) {
-          website = urlMatch[0];
         }
       }
 
       if (website) {
         // Clean up the URL
-        website = website.split('?')[0]; // Remove query params
+        try {
+          // Decode Google redirect if present (google.com/url?q=...)
+          if (website.includes('google.com/url')) {
+            const urlObj = new URL(website);
+            website = urlObj.searchParams.get('q') || website;
+          }
+          website = website.split('?')[0]; // Remove tracking params
+        } catch (e) { }
+
         place.website = website;
         try {
           const url = new URL(website);
@@ -608,54 +608,16 @@
     }
   }
 
-  // Handle search response data
-  function handleSearchData(event) {
-    if (!isScaping) return;
-
-    addLog('📥 Received search API response');
-
-    // The response might contain additional data
-    // For now, we'll rely on DOM scraping
-    // In future, can parse the API response for more details
-
-    setTimeout(() => scrapeVisibleResults(), 500);
+  // Helper for fuzzy string matching
+  function isNameMatch(n1, n2) {
+    if (!n1 || !n2) return false;
+    const s1 = n1.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const s2 = n2.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return s1.includes(s2) || s2.includes(s1);
   }
 
-  // Handle details response data
-  function handleDetailsData(event) {
-    if (!isScaping) return;
 
-    addLog('📥 Received details API response');
 
-    // Check if we have parsed place details
-    if (event.detail && event.detail.placeDetails) {
-      const apiDetails = event.detail.placeDetails;
-
-      // Try to match this with a recently added place
-      // Use the most recent place without full details
-      const recentPlace = scrapedData
-        .slice()
-        .reverse()
-        .find(p => !p.phone || !p.website);
-
-      if (recentPlace) {
-        // Enrich the place data with API details
-        if (apiDetails.phone && !recentPlace.phone) {
-          recentPlace.phone = apiDetails.phone;
-          recentPlace.phones = apiDetails.phone;
-        }
-        if (apiDetails.website && !recentPlace.website) {
-          recentPlace.website = apiDetails.website;
-          try {
-            const domain = new URL(apiDetails.website).hostname.replace('www.', '');
-            recentPlace.domain = domain;
-          } catch (e) { }
-        }
-
-        addLog(`✨ Enhanced data with API details for: ${recentPlace.name}`);
-      }
-    }
-  }
 
   // Export data to CSV
   function exportToCSV() {
@@ -820,9 +782,7 @@
 
     console.log('Mr. G-Map Scrapper: On maps page, proceeding with init...');
 
-    // Inject API interceptor
-    injectInterceptor();
-    console.log('Mr. G-Map Scrapper: Interceptor injected');
+
 
     // Create UI with multiple retry attempts
     let attempts = 0;

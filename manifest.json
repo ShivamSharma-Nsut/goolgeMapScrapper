@@ -33,20 +33,6 @@
       "all_frames": false
     }
   ],
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "injected.js"
-      ],
-      "matches": [
-        "https://*.google.com/*",
-        "https://*.google.co.in/*",
-        "https://*.google.co.uk/*",
-        "https://*.google.ca/*",
-        "https://*.google.com.au/*"
-      ]
-    }
-  ],
   "icons": {
     "16": "icon16.png",
     "48": "icon48.png",
