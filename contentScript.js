@@ -629,26 +629,19 @@
     addLog('💾 Preparing CSV export...');
 
     // Define CSV headers matching the sample format
+    // Define CSV headers matching the sample format
     const headers = [
       'Name',
+      'Phone',
+      'Website Name',
+      'Rating',
+      'Rating Quantity',
       'Description',
       'Fulladdress',
       'Street',
       'Municipality',
       'Categories',
-      'Time Zone',
-      'Amenities',
-      'Phone',
-      'Phones',
-      'Claimed',
-      'Review Count',
-      'Average Rating',
-      'Review URL',
       'Google Maps URL',
-      'Latitude',
-      'Longitude',
-      'Website',
-      'Domain',
       'Opening Hours',
       'Featured Image',
       'Cid',
@@ -662,29 +655,21 @@
     scrapedData.forEach(place => {
       const row = [
         escapeCsvValue(place.name),
+        escapeCsvValue(place.phone || ''),
+        escapeCsvValue(place.domain || ''),
+        escapeCsvValue(place.averageRating || ''),
+        escapeCsvValue(place.reviewCount || ''),
         escapeCsvValue(place.description),
         escapeCsvValue(place.fullAddress),
         escapeCsvValue(place.street),
         escapeCsvValue(place.municipality),
         escapeCsvValue(place.categories),
-        place.timeZone || 'America/Chicago',
-        escapeCsvValue(place.amenities),
-        place.phone || '',
-        place.phones || place.phone || '',
-        place.claimed || '',
-        place.reviewCount || '',
-        place.averageRating || '',
-        place.reviewUrl || '',
-        place.googleMapsUrl || '',
-        place.latitude || '',
-        place.longitude || '',
-        place.website || '',
-        place.domain || '',
+        escapeCsvValue(place.googleMapsUrl || ''),
         escapeCsvValue(place.openingHours),
-        place.featuredImage || '',
-        place.cid || '',
-        place.fid || '',
-        place.placeId || ''
+        escapeCsvValue(place.featuredImage || ''),
+        escapeCsvValue(place.cid || ''),
+        escapeCsvValue(place.fid || ''),
+        escapeCsvValue(place.placeId || '')
       ];
       csvContent += row.join(',') + '\n';
     });
